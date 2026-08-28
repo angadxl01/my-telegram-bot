@@ -21,13 +21,12 @@ BOT_TOKEN = "8794925442:AAFIHaUAJM8ZXt2guEN7Lq2kKyTTKzECWqw"
 ADMIN_ID = 8895089247
 SUPPORT_USERNAME = "tgprimesoul"
 
-# Enter API_ID and API_HASH from my.telegram.org
-API_ID = 36645562  # Replace with your actual API_ID
-API_HASH = "ccad405579d80b82492abbf4a7777907"  # Replace with your actual API_HASH
+# 👉 YAHAN APNA my.telegram.org SE MILA DETAILS ENTER KAREIN
+API_ID = 36645562          # Change to your real API_ID (e.g. 2847593)
+API_HASH = "ccad405579d80b82492abbf4a7777907" # Change to your real API_HASH
 
 MIN_DEPOSIT = 25
 
-# Global Settings
 payment_settings = {
     "upi": "tgprimesoul@upi",
     "qr_url": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=tgprimesoul@upi",
