@@ -14,9 +14,9 @@ from telegram.ext import (
 
 # --- CONFIGURATION ---
 BOT_TOKEN = "8906190418:AAEsPFEkD8OHqsMgwKFUKNR8IJcZmJI_3mc"
-ADMIN_ID = 8895089247  # Set to your Telegram Numeric ID
+ADMIN_ID = 8895089247
 
-# --- FLASK WEBSERVER FOR FREE RENDER HOSTING ---
+# --- FLASK WEBSERVER FOR RENDER ---
 web_app = Flask('')
 
 @web_app.route('/')
@@ -98,7 +98,7 @@ async def confirm_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     await query.message.edit_text(
-        f"✅ <b>Order Placed!</b>\n\nYour request for <b>{item['name']}</b> has been sent to Admin. Contact admin to complete payment.",
+        f"✅ <b>Order Placed!</b>\n\nYour request for <b>{item['name']}</b> has been sent to Admin.",
         parse_mode="HTML"
     )
 
@@ -118,23 +118,22 @@ async def confirm_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def payment_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    msg = "<b>💳 Payment Details:</b>\n\nContact Admin for UPI/Crypto payment details."
+    msg = "<b>💳 Payment Details:</b>\n\nContact Admin for payment details."
     keyboard = [[InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")]]
     await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 async def support_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    msg = "<b>👨‍💻 Support:</b>\n\nFor support, contact admin directly."
+    msg = "<b>👨‍💻 Support:</b>\n\nFor support, contact admin."
     keyboard = [[InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")]]
     await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
 
 # --- ADMIN HANDLERS ---
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
-        await update.message.reply_text("❌ Access Denied! You are not authorized.")
+        await update.message.reply_text("❌ Access Denied!")
         return
 
     keyboard = [
@@ -142,7 +141,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         [InlineKeyboardButton("🗑️ Delete Stock", callback_data="admin_delete_menu")],
         [InlineKeyboardButton("📊 View Total Stock", callback_data="admin_view")]
     ]
-    msg = "<b>⚙️ Admin Dashboard</b>\nSelect an action below:"
+    msg = "<b>⚙️ Admin Dashboard</b>"
     if update.message:
         await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     else:
@@ -169,8 +168,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif data == "admin_add":
         admin_states[query.from_user.id] = "WAITING_STOCK_DATA"
         await query.message.edit_text(
-            "<b>➕ Add Stock Item</b>\n\nSend item details in this format:\n<code>Name | Price | Details</code>\n\n"
-            "Example:\n<code>+1 USA Account | 4.50 | Pass: 12345 Session: abc</code>",
+            "<b>➕ Add Stock Item</b>\n\nSend format:\n<code>Name | Price | Details</code>",
             parse_mode="HTML"
         )
 
@@ -182,7 +180,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         for item in stock_db:
             keyboard.append([InlineKeyboardButton(f"❌ Delete ID {item['id']}: {item['name']}", callback_data=f"del_{item['id']}")])
         keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="admin_home")])
-        await query.message.edit_text("<b>Select item to delete:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        await query.message.edit_text("<b>Select item:</b>", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     elif data.startswith("del_"):
         item_id = int(data.split("_")[1])
@@ -202,7 +200,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             try:
                 await context.bot.send_message(
                     chat_id=target_user_id,
-                    text=f"🎉 <b>Payment Approved! Here is your item:</b>\n\n<b>Item:</b> {item['name']}\n<b>Data:</b>\n<code>{item['details']}</code>",
+                    text=f"🎉 <b>Item Details:</b>\n\n<b>Item:</b> {item['name']}\n<b>Data:</b>\n<code>{item['details']}</code>",
                     parse_mode="HTML"
                 )
                 await query.message.edit_text(f"✅ Delivered to User ID: {target_user_id}")
@@ -211,7 +209,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     elif data.startswith("reject_"):
         target_user_id = int(data.split("_")[1])
-        await context.bot.send_message(chat_id=target_user_id, text="❌ Order request rejected by admin.")
+        await context.bot.send_message(chat_id=target_user_id, text="❌ Order request rejected.")
         await query.message.edit_text("Order Rejected.")
 
 async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -228,15 +226,13 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             })
             item_counter += 1
             admin_states[user_id] = None
-            await update.message.reply_text("✅ Stock added successfully! Send /admin to view.")
+            await update.message.reply_text("✅ Stock added successfully!")
         except Exception:
-            await update.message.reply_text("❌ Incorrect format. Use:\n`Name | Price | Details`")
+            await update.message.reply_text("❌ Format error! Use: `Name | Price | Details`")
 
 def main():
-    # Run Web Server Thread for Render
     threading.Thread(target=run_flask, daemon=True).start()
 
-    # Telegram Bot App
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -255,37 +251,5 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    main()        "<b>💳 Accepted Payment Methods:</b>\n\n"
-        "• USDT (TRC20): <code>YOUR_USDT_ADDRESS_HERE</code>\n"
-        "• BTC: <code>YOUR_BTC_ADDRESS_HERE</code>\n"
-        "• UPI / Other: Contact Admin\n\n"
-        "After payment, send proof to @YourAdminUsername to receive your account details."
-    )
-    keyboard = [[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")]]
-    await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-async def support_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Display support contact info."""
-    query = update.callback_query
-    await query.answer()
-
-    msg = "<b>👨‍💻 Support:</b>\n\nFor any inquiries or issues, contact @YourAdminUsername."
-    keyboard = [[InlineKeyboardButton("🔙 Back to Main Menu", callback_data="main_menu")]]
-    await query.message.edit_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(start, pattern="^main_menu$"))
-    app.add_handler(CallbackQueryHandler(stock_menu, pattern="^view_stock$"))
-    app.add_handler(CallbackQueryHandler(payment_info, pattern="^payment_info$"))
-    app.add_handler(CallbackQueryHandler(support_info, pattern="^support_info$"))
-    app.add_handler(CallbackQueryHandler(buy_item, pattern="^buy_"))
-    app.add_handler(CallbackQueryHandler(confirm_purchase, pattern="^confirm_"))
-
-    print("Bot is running...")
-    app.run_polling()
-
-if __name__ == "__main__":
     main()
+               
