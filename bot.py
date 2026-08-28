@@ -13,28 +13,29 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     MessageHandler,
+    ConversationHandler,
     filters,
 )
 
-# ==================== EDIT THESE DETAILS ====================
+# ==================== FILL YOUR EXACT DETAILS HERE ====================
 BOT_TOKEN = "8794925442:AAFIHaUAJM8ZXt2guEN7Lq2kKyTTKzECWqw"
-ADMIN_ID = 8895089247              # Aapka Numeric Telegram ID
-SUPPORT_USERNAME = "tgprimesoul"   # Aapka Support Username
+ADMIN_ID = 8895089247              # Aapka Telegram Numeric ID
+SUPPORT_USERNAME = "tgprimesoul"   # Support Telegram Username
 
-API_ID = 36645562                   # 👈 EDIT THIS: my.telegram.org ka API_ID (e.g. 2847593)
-API_HASH = "ccad405579d80b82492abbf4a7777907"    # 👈 EDIT THIS: my.telegram.org ka API_HASH
-# ============================================================
+API_ID =  36645562              # my.telegram.org ka API_ID
+API_HASH = "ccad405579d80b82492abbf4a7777907"    # my.telegram.org ka API_HASH
+# ====================================================================
 
 MIN_DEPOSIT = 25
 
 payment_settings = {
-    "upi": "tgprimesoul@upi",
+    "upi": "angadxl@fam",
     "qr_url": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=tgprimesoul@upi",
-    "crypto": "USDT (TRC20): TYourUSDTWalletAddressHere",
-    "note": "Minimum Deposit ₹25. Payment ke baad screenshot Admin ko bhejeyin."
+    "crypto": "USDT (TRC20): TYourUSDTWalletAddressHere"
 }
 
-admin_wizard = {}
+# Conversation States for Admin Add Stock Wizard
+WAITING_AGE, WAITING_PRICE, WAITING_PHONE, WAITING_SESSION = range(4)
 
 # --- DATABASE ENGINE ---
 def init_db():
@@ -201,7 +202,7 @@ async def pay_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-# --- LIVE AUTO OTP FETCHING ---
+# --- LIVE AUTO OTP FETCHING ENGINE ---
 
 async def fetch_live_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -226,7 +227,7 @@ async def fetch_live_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await client.connect()
 
         if not await client.is_user_authorized():
-            await msg_status.edit_text("❌ <b>Session Invalid / Logged Out!</b>\nYeh session expire ho gaya hai.")
+            await msg_status.edit_text("❌ <b>Session Expired / Logged Out!</b>\nYeh session expire ho gaya hai.")
             await client.disconnect()
             return
 
@@ -297,118 +298,72 @@ async def support_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [[InlineKeyboardButton("📩 Contact @tgprimesoul", url=f"https://t.me/{SUPPORT_USERNAME}")], [InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]]
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-# --- ADMIN CONTROL PANEL ---
+# --- ADMIN CONVERSATION WIZARD ENGINE ---
 
-async def cmd_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_stock_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        return
+        return ConversationHandler.END
 
     kb = [
-        [InlineKeyboardButton("➕ Add Stock", callback_data="adm_panel_add"), InlineKeyboardButton("📊 View Stock", callback_data="adm_panel_view")],
-        [InlineKeyboardButton("⚙️ Payment Settings", callback_data="adm_panel_pay")],
-        [InlineKeyboardButton("❌ Close", callback_data="adm_panel_close")]
+        [InlineKeyboardButton("🔹 Normal Acc", callback_data="addcat_normal")],
+        [InlineKeyboardButton("⭐ Premium Acc", callback_data="addcat_premium")],
+        [InlineKeyboardButton("🛠️ Maked Acc", callback_data="addcat_maked")]
     ]
-    txt = "<b>⚡ ADMIN CONTROL PANEL</b>\n\nManage stock and settings below."
-    if update.message:
-        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-    else:
-        await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    await update.message.reply_text("<b>[Step 1/5] Select Account Category:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    return WAITING_AGE
 
-async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_stock_category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    if q.from_user.id != ADMIN_ID:
-        return
     await q.answer()
+    category = q.data.replace("addcat_", "")
+    context.user_data["add_cat"] = category
 
-    data = q.data
-    if data == "adm_panel_add":
-        await cmd_add(update, context)
-    elif data == "adm_panel_view":
-        await cmd_viewstock(update, context)
-    elif data == "adm_panel_pay":
-        admin_wizard[ADMIN_ID] = {"step": "EDIT_UPI"}
-        await q.message.edit_text(f"Current UPI: <code>{payment_settings['upi']}</code>\n\nSend NEW <b>UPI ID</b> (or <code>skip</code>):", parse_mode="HTML")
-    elif data == "adm_panel_close":
-        await q.message.delete()
+    await q.message.edit_text(f"Category Selected: <b>{category.upper()}</b>\n\n<b>[Step 2/5]</b> Send Account Age (e.g. <code>2023 Aged</code>):", parse_mode="HTML")
+    return WAITING_PRICE
 
-async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
+async def add_stock_age_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["add_age"] = update.message.text.strip()
+    await update.message.reply_text("<b>[Step 3/5]</b> Enter Price in ₹ (Only numbers, e.g. <code>50</code>):", parse_mode="HTML")
+    return WAITING_PHONE
 
-    kb = [
-        [InlineKeyboardButton("🔹 Normal Acc", callback_data="adm_type_normal")],
-        [InlineKeyboardButton("⭐ Premium Acc", callback_data="adm_type_premium")],
-        [InlineKeyboardButton("🛠️ Maked Acc", callback_data="adm_type_maked")]
-    ]
-    admin_wizard[ADMIN_ID] = {"step": "SELECT_TYPE"}
-    txt = "<b>➕ Select Account Category:</b>"
-    if update.callback_query:
-        await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-    else:
-        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-
-async def admin_wizard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    if q.from_user.id != ADMIN_ID:
-        return
-    await q.answer()
-
-    acc_type = q.data.replace("adm_type_", "")
-    admin_wizard[ADMIN_ID] = {"step": "WAITING_AGE", "category": acc_type}
-    await q.message.edit_text(f"Selected: <b>{acc_type.capitalize()}</b>\n\n<b>Step 2:</b> Send Account Age (e.g. <code>2023 Aged</code>):", parse_mode="HTML")
-
-async def handle_admin_wizard_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    if uid != ADMIN_ID or uid not in admin_wizard:
-        return
-
-    state = admin_wizard[uid]
-    step = state.get("step")
+async def add_stock_price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    try:
+        price = float(text)
+        context.user_data["add_price"] = price
+        await update.message.reply_text("<b>[Step 4/5]</b> Send Phone Number (e.g. <code>+919876543210</code>):", parse_mode="HTML")
+        return WAITING_SESSION
+    except ValueError:
+        await update.message.reply_text("❌ Invalid price! Enter numbers only (e.g. 50):")
+        return WAITING_PRICE
 
-    if step == "EDIT_UPI":
-        if text.lower() != "skip":
-            payment_settings["upi"] = text
-            payment_settings["qr_url"] = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa={text}"
-        state["step"] = "EDIT_CRYPTO"
-        await update.message.reply_text("Send NEW <b>Crypto Address</b> (or <code>skip</code>):", parse_mode="HTML")
+async def add_stock_phone_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["add_phone"] = update.message.text.strip()
+    await update.message.reply_text("<b>[Step 5/5] NOW PASTE THE TELETHON STRING SESSION:</b>", parse_mode="HTML")
+    return WAITING_SESSION
 
-    elif step == "EDIT_CRYPTO":
-        if text.lower() != "skip":
-            payment_settings["crypto"] = text
-        del admin_wizard[uid]
-        await update.message.reply_text("✅ Payment Details Updated!", parse_mode="HTML")
+async def add_stock_session_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    session_str = update.message.text.strip()
+    cat = context.user_data.get("add_cat")
+    age = context.user_data.get("add_age")
+    price = context.user_data.get("add_price")
+    phone = context.user_data.get("add_phone")
 
-    elif step == "WAITING_AGE":
-        state["age"] = text
-        state["step"] = "WAITING_PRICE"
-        await update.message.reply_text("<b>Step 3:</b> Enter Price (₹):", parse_mode="HTML")
+    conn = sqlite3.connect("store.db")
+    c = conn.cursor()
+    c.execute("INSERT INTO stock (category, age, price, phone, session) VALUES (?, ?, ?, ?, ?)",
+              (cat, age, price, phone, session_str))
+    conn.commit()
+    conn.close()
 
-    elif step == "WAITING_PRICE":
-        try:
-            state["price"] = float(text)
-            state["step"] = "WAITING_PHONE"
-            await update.message.reply_text("<b>Step 4:</b> Send Phone Number (e.g. <code>+919876543210</code>):", parse_mode="HTML")
-        except ValueError:
-            await update.message.reply_text("❌ Enter valid price number:", parse_mode="HTML")
+    context.user_data.clear()
+    await update.message.reply_text(f"✅ <b>STOCK SUCCESSFULLY ADDED!</b>\n\n• Category: {cat.upper()}\n• Age: {age}\n• Price: ₹{price}\n• Phone: <code>{phone}</code>", parse_mode="HTML")
+    return ConversationHandler.END
 
-    elif step == "WAITING_PHONE":
-        state["phone"] = text
-        state["step"] = "WAITING_SESSION"
-        await update.message.reply_text("<b>Step 5:</b> Paste <b>Telethon Session String</b>:", parse_mode="HTML")
-
-    elif step == "WAITING_SESSION":
-        state["session"] = text
-        
-        conn = sqlite3.connect("store.db")
-        c = conn.cursor()
-        c.execute("INSERT INTO stock (category, age, price, phone, session) VALUES (?, ?, ?, ?, ?)",
-                  (state["category"], state["age"], state["price"], state["phone"], state["session"]))
-        conn.commit()
-        conn.close()
-
-        del admin_wizard[uid]
-        await update.message.reply_text(f"✅ <b>Stock Added!</b>\nPhone: <code>{state['phone']}</code>", parse_mode="HTML")
+async def cancel_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text("❌ Cancelled stock adding process.")
+    return ConversationHandler.END
 
 async def cmd_addbal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -437,10 +392,7 @@ async def cmd_viewstock(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i in items:
             txt += f"• ID: {i[0]} [{i[1].upper()}] | Age: {i[2]} — ₹{i[3]}\n  Phone: <code>{i[4]}</code>\n\n"
     
-    if update.callback_query:
-        await update.callback_query.message.reply_text(txt, parse_mode="HTML")
-    else:
-        await update.message.reply_text(txt, parse_mode="HTML")
+    await update.message.reply_text(txt, parse_mode="HTML")
 
 def main():
     threading.Thread(target=run_flask, daemon=True).start()
@@ -460,14 +412,22 @@ def main():
     app.add_handler(CallbackQueryHandler(deposit_method_handler, pattern="^dep_"))
     app.add_handler(CallbackQueryHandler(support_info, pattern="^btn_support$"))
 
-    # Admin Routes
-    app.add_handler(CommandHandler("admin", cmd_admin))
-    app.add_handler(CallbackQueryHandler(admin_panel_callback, pattern="^adm_panel_"))
-    app.add_handler(CommandHandler("add", cmd_add))
-    app.add_handler(CallbackQueryHandler(admin_wizard_callback, pattern="^adm_type_"))
+    # Admin Add Stock Conversation Handler
+    add_wizard = ConversationHandler(
+        entry_points=[CommandHandler("add", add_stock_start)],
+        states={
+            WAITING_AGE: [CallbackQueryHandler(add_stock_category_selected, pattern="^addcat_")],
+            WAITING_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_stock_age_received)],
+            WAITING_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_stock_price_received)],
+            WAITING_SESSION: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_stock_phone_received)],
+            4: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_stock_session_received)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel_wizard)],
+    )
+
+    app.add_handler(add_wizard)
     app.add_handler(CommandHandler("addbal", cmd_addbal))
     app.add_handler(CommandHandler("viewstock", cmd_viewstock))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_wizard_input))
 
     app.run_polling()
 
