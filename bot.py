@@ -16,14 +16,14 @@ from telegram.ext import (
     filters,
 )
 
-# --- CONFIGURATION ---
+# ==================== EDIT THESE DETAILS ====================
 BOT_TOKEN = "8794925442:AAFIHaUAJM8ZXt2guEN7Lq2kKyTTKzECWqw"
-ADMIN_ID = 8895089247
-SUPPORT_USERNAME = "tgprimesoul"
+ADMIN_ID = 8895089247              # Aapka Numeric Telegram ID
+SUPPORT_USERNAME = "tgprimesoul"   # Aapka Support Username
 
-# 👉 YAHAN APNA my.telegram.org SE MILA DETAILS ENTER KAREIN
-API_ID = 36645562          # Change to your real API_ID (e.g. 2847593)
-API_HASH = "ccad405579d80b82492abbf4a7777907" # Change to your real API_HASH
+API_ID = 36645562                   # 👈 EDIT THIS: my.telegram.org ka API_ID (e.g. 2847593)
+API_HASH = "ccad405579d80b82492abbf4a7777907"    # 👈 EDIT THIS: my.telegram.org ka API_HASH
+# ============================================================
 
 MIN_DEPOSIT = 25
 
@@ -201,6 +201,8 @@ async def pay_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
+# --- LIVE AUTO OTP FETCHING ---
+
 async def fetch_live_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -217,23 +219,21 @@ async def fetch_live_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     session_str, phone = purchase[0], purchase[1]
-    await q.message.reply_text("🔄 <b>Checking OTP from Telegram... Please wait 5 seconds.</b>", parse_mode="HTML")
+    msg_status = await q.message.reply_text("🔄 <b>Checking Telegram System (777000)...</b>", parse_mode="HTML")
 
     try:
         client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
         await client.connect()
 
         if not await client.is_user_authorized():
-            await q.message.reply_text("❌ Session expired or account logged out.")
+            await msg_status.edit_text("❌ <b>Session Invalid / Logged Out!</b>\nYeh session expire ho gaya hai.")
             await client.disconnect()
             return
 
-        messages = await client.get_messages(777000, limit=3)
         otp_found = None
-
-        for msg in messages:
-            if msg.text:
-                match = re.search(r'\b\d{5}\b', msg.text)
+        async for message in client.iter_messages(777000, limit=10):
+            if message.text:
+                match = re.search(r'\b\d{5,6}\b', message.text)
                 if match:
                     otp_found = match.group(0)
                     break
@@ -242,13 +242,13 @@ async def fetch_live_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if otp_found:
             kb = [[InlineKeyboardButton("📩 GET OTP AGAIN", callback_data=f"get_otp_{item_id}")]]
-            await q.message.reply_text(f"🔑 <b>YOUR LOGIN OTP:</b> <code>{otp_found}</code>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+            await msg_status.edit_text(f"🔑 <b>YOUR LOGIN OTP:</b> <code>{otp_found}</code>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
         else:
             kb = [[InlineKeyboardButton("🔄 TRY AGAIN", callback_data=f"get_otp_{item_id}")]]
-            await q.message.reply_text("❌ <b>OTP Code not received yet.</b> Please request code on app first.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+            await msg_status.edit_text("❌ <b>OTP nahi mila!</b>\n\n1. App par number daal kar OTP request bhejo.\n2. Phir 5 sec baad yahan 'TRY AGAIN' dabao.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
     except Exception as e:
-        await q.message.reply_text(f"⚠️ Error reading OTP: {str(e)}")
+        await msg_status.edit_text(f"⚠️ <b>Session Error:</b>\n<code>{str(e)}</code>")
 
 async def user_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
