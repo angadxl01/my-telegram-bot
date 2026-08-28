@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 
 # ==================== CONFIGURATION ====================
-BOT_TOKEN = "8794925442:AAFIHaUAJM8ZXt2guEN7Lq2kKyTTKzECWqw"
+BOT_TOKEN = "8715769463:AAGuis4-gd9vF0Tew1fKGpdVCgtpioqX5bU"
 MAIN_ADMIN_ID = 8895089247         # Main Numeric Admin ID
 SUPPORT_USERNAME = "tgprimesoul"   # Support Username
 
