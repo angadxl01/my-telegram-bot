@@ -12,30 +12,27 @@ from telegram.ext import (
     filters,
 )
 
-# Configuration
+# Config
 BOT_TOKEN = "8794925442:AAFIHaUAJM8ZXt2guEN7Lq2kKyTTKzECWqw"
 ADMIN_ID = 8895089247
+SUPPORT_USERNAME = "tgprimesoul"  # Admin Support Handle
 
-# Flask Webserver
+# Web Server
 web_app = Flask('')
 
 @web_app.route('/')
 def home():
-    return "Bot Running 24/7"
+    return "Heart Store Engine Active"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host='0.0.0.0', port=port)
 
-# Data Storage
+# Store Database
 users = {}
-categories = ["🇺🇸 USA Accounts", "🇬🇧 UK Accounts", "⭐️ TG Premium", "💎 Username Stock"]
-items = [
-    {"id": 1, "cat": "🇺🇸 USA Accounts", "title": "USA Aged 2022 Account", "price": 4.5, "data": "Session: US_2022_KEY_9921"},
-    {"id": 2, "cat": "🇬🇧 UK Accounts", "title": "UK Fresh Account", "price": 3.0, "data": "Session: UK_FRESH_KEY_1092"}
-]
-item_id_counter = 3
-admin_action = {}
+items = []
+item_counter = 1
+admin_wizard = {}  # Store temporary steps for stock addition
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
@@ -49,270 +46,284 @@ def clean_html(text):
         return ""
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# User Handlers
+# --- USER MENU ---
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     u_data = get_user(u.id)
-    first_name = clean_html(u.first_name)
+    name = clean_html(u.first_name)
 
     kb = [
-        [InlineKeyboardButton("🛍️ Browse Store", callback_data="btn_cats")],
-        [InlineKeyboardButton("👤 My Profile", callback_data="btn_profile"), InlineKeyboardButton("💵 Add Balance", callback_data="btn_add_bal")],
-        [InlineKeyboardButton("👨‍💻 Support / Contact", callback_data="btn_support")]
+        [InlineKeyboardButton("🛍️ Browse Categories", callback_data="btn_categories")],
+        [InlineKeyboardButton("👤 Profile", callback_data="btn_profile"), InlineKeyboardButton("💳 Add Money", callback_data="btn_add_bal")],
+        [InlineKeyboardButton("👨‍💻 Support", callback_data="btn_support")]
     ]
+    
     txt = (
-        f"<b>Welcome to TG Store! 👋</b>\n\n"
-        f"👤 <b>User:</b> {first_name}\n"
+        f"<b>❤️ Welcome to TG Store! 👋</b>\n\n"
+        f"👤 <b>User:</b> {name}\n"
         f"🆔 <b>ID:</b> <code>{u.id}</code>\n"
-        f"💰 <b>Wallet Balance:</b> ${u_data['balance']:.2f}\n\n"
-        f"Select an option below to start buying stock:"
+        f"💰 <b>Balance:</b> ${u_data['balance']:.2f}\n\n"
+        f"<i>Select an option below to buy Accounts/Stock:</i>"
     )
 
     if update.message:
         await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
     else:
         await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
+async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    kb = [
+        [InlineKeyboardButton("🔹 Normal Acc", callback_data="cat_normal")],
+        [InlineKeyboardButton("⭐ Premium Acc", callback_data="cat_premium")],
+        [InlineKeyboardButton("🛠️ Maked Acc", callback_data="cat_maked")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]
+    ]
+    await q.message.edit_text("<b>📂 Select Account Category:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
+async def category_stock_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    
+    cat_type = q.data.replace("cat_", "").lower()
+    cat_names = {"normal": "Normal Acc", "premium": "Premium Acc", "maked": "Maked Acc"}
+    cat_title = cat_names.get(cat_type, "Accounts")
+
+    filtered_items = [i for i in items if i.get("category", "").lower() == cat_type]
+
+    if not filtered_items:
+        kb = [[InlineKeyboardButton("🔙 Back to Categories", callback_data="btn_categories")]]
+        await q.message.edit_text(f"❌ <b>No stock available in {cat_title}!</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+        return
+
+    kb = []
+    for i in filtered_items:
+        kb.append([InlineKeyboardButton(f"{i['age']} ({i['category'].capitalize()}) — ${i['price']:.2f}", callback_data=f"buy_{i['id']}")])
+    kb.append([InlineKeyboardButton("🔙 Back to Categories", callback_data="btn_categories")])
+
+    await q.message.edit_text(f"<b>🛍️ Available in {cat_title}:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
+async def buy_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    item_id = int(q.data.split("_")[1])
+    item = next((i for i in items if i["id"] == item_id), None)
+
+    if not item:
+        await q.message.edit_text("❌ Sold out!")
+        return
+
+    u_data = get_user(q.from_user.id)
+    kb = [
+        [InlineKeyboardButton("⚡ Confirm & Buy", callback_data=f"pay_{item['id']}")],
+        [InlineKeyboardButton("🔙 Back", callback_data="btn_categories")]
+    ]
+    txt = (
+        f"<b>📦 Account Type:</b> {clean_html(item['category'].capitalize())} Acc\n"
+        f"<b>⏳ Account Age:</b> {clean_html(item['age'])}\n"
+        f"<b>💵 Price:</b> ${item['price']:.2f}\n\n"
+        f"<b>Your Wallet Balance:</b> ${u_data['balance']:.2f}"
+    )
+    await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
+async def pay_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    uid = q.from_user.id
+    item_id = int(q.data.split("_")[1])
+    item = next((i for i in items if i["id"] == item_id), None)
+
+    if not item:
+        await q.message.edit_text("❌ Item already sold.")
+        return
+
+    u_data = get_user(uid)
+
+    if u_data["balance"] < item["price"]:
+        kb = [[InlineKeyboardButton("💳 Add Balance", callback_data="btn_add_bal")], [InlineKeyboardButton("🔙 Back", callback_data="btn_categories")]]
+        await q.message.edit_text(f"❌ <b>Insufficient Balance!</b>\nPrice: ${item['price']:.2f}\nYour Balance: ${u_data['balance']:.2f}", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+        return
+
+    u_data["balance"] -= item["price"]
+    u_data["orders"] += 1
+    items.remove(item)
+
+    await q.message.edit_text(
+        f"🎉 <b>Purchase Successful!</b>\n\n"
+        f"<b>Category:</b> {clean_html(item['category'].capitalize())} Acc\n"
+        f"<b>Age:</b> {clean_html(item['age'])}\n"
+        f"<b>Price Paid:</b> ${item['price']:.2f}\n\n"
+        f"🔑 <b>Your Account Data:</b>\n<code>{clean_html(item['data'])}</code>",
+        parse_mode="HTML"
+    )
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"🛍️ <b>Auto Sale Alert!</b>\nUser: @{q.from_user.username} (<code>{uid}</code>)\nCategory: {clean_html(item['category'].capitalize())}\nAge: {clean_html(item['age'])}",
+        parse_mode="HTML"
+    )
 
 async def user_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     u = q.from_user
     u_data = get_user(u.id)
-    first_name = clean_html(u.first_name)
 
+    txt = f"<b>👤 PROFILE INFO</b>\n\n• Name: {clean_html(u.first_name)}\n• User ID: <code>{u.id}</code>\n• Balance: ${u_data['balance']:.2f}\n• Orders: {u_data['orders']}"
+    kb = [[InlineKeyboardButton("💳 Deposit", callback_data="btn_add_bal")], [InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]]
+    await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+
+async def deposit_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
     txt = (
-        f"<b>👤 PROFILE INFO</b>\n\n"
-        f"• <b>Name:</b> {first_name}\n"
-        f"• <b>User ID:</b> <code>{u.id}</code>\n"
-        f"• <b>Balance:</b> ${u_data['balance']:.2f}\n"
-        f"• <b>Completed Orders:</b> {u_data['orders']}"
+        f"<b>💳 ADD MONEY TO WALLET</b>\n\n"
+        f"Contact Support Admin to add balance via UPI / Crypto / Bank Transfer.\n\n"
+        f"📩 <b>Support Admin:</b> @{SUPPORT_USERNAME}"
     )
     kb = [
-        [InlineKeyboardButton("💵 Deposit Funds", callback_data="btn_add_bal")],
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="btn_main")]
+        [InlineKeyboardButton("💬 Message Supporter", url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]
     ]
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def support_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
-    kb = []
-    for c in categories:
-        kb.append([InlineKeyboardButton(c, callback_data=f"cat_{c}")])
-    kb.append([InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")])
-
-    await q.message.edit_text("<b>📂 Select Category:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-
-async def category_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    cat_name = q.data.replace("cat_", "")
-
-    cat_items = [i for i in items if i["cat"] == cat_name]
-
-    if not cat_items:
-        kb = [[InlineKeyboardButton("🔙 Back", callback_data="btn_cats")]]
-        await q.message.edit_text(f"❌ No stock in <b>{clean_html(cat_name)}</b> right now.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-        return
-
-    kb = []
-    for i in cat_items:
-        kb.append([InlineKeyboardButton(f"{i['title']} - ${i['price']:.2f}", callback_data=f"buy_item_{i['id']}")])
-    kb.append([InlineKeyboardButton("🔙 Back", callback_data="btn_cats")])
-
-    await q.message.edit_text(f"<b>📦 Category: {clean_html(cat_name)}</b>\nChoose item to buy:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-
-async def item_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    item_id = int(q.data.split("_")[2])
-    target_item = next((i for i in items if i["id"] == item_id), None)
-
-    if not target_item:
-        await q.message.edit_text("Item unavailable.")
-        return
-
-    u_data = get_user(q.from_user.id)
+    
+    txt = (
+        f"<b>👨‍💻 CUSTOMER SUPPORT</b>\n\n"
+        f"Need help with an order or balance? Click below to chat directly with our support team:\n\n"
+        f"👤 <b>Supporter User:</b> @{SUPPORT_USERNAME}"
+    )
     kb = [
-        [InlineKeyboardButton("⚡ Buy Instantly", callback_data=f"purchase_{target_item['id']}")],
-        [InlineKeyboardButton("🔙 Back", callback_data="btn_cats")]
+        [InlineKeyboardButton("📩 Contact @tgprimesoul", url=f"https://t.me/{SUPPORT_USERNAME}")],
+        [InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]
     ]
-    txt = (
-        f"<b>🛒 Item Details:</b>\n\n"
-        f"• <b>Name:</b> {clean_html(target_item['title'])}\n"
-        f"• <b>Category:</b> {clean_html(target_item['cat'])}\n"
-        f"• <b>Price:</b> ${target_item['price']:.2f}\n\n"
-        f"<b>Your Wallet:</b> ${u_data['balance']:.2f}"
-    )
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-async def process_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    uid = q.from_user.id
-    item_id = int(q.data.split("_")[1])
-    target_item = next((i for i in items if i["id"] == item_id), None)
+# --- INTERACTIVE /add ADMIN WIZARD ---
 
-    if not target_item:
-        await q.message.edit_text("Item is sold out!")
-        return
-
-    u_data = get_user(uid)
-
-    if u_data["balance"] < target_item["price"]:
-        kb = [
-            [InlineKeyboardButton("💵 Deposit Money", callback_data="btn_add_bal")],
-            [InlineKeyboardButton("🔙 Back", callback_data="btn_cats")]
-        ]
-        await q.message.edit_text(
-            f"❌ <b>Insufficient Funds!</b>\n\nPrice: ${target_item['price']:.2f}\nYour Balance: ${u_data['balance']:.2f}",
-            reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML"
-        )
-        return
-
-    u_data["balance"] -= target_item["price"]
-    u_data["orders"] += 1
-    items.remove(target_item)
-
-    await q.message.edit_text(
-        f"✅ <b>PURCHASE SUCCESSFUL!</b>\n\n"
-        f"<b>Item:</b> {clean_html(target_item['title'])}\n"
-        f"<b>Price:</b> ${target_item['price']:.2f}\n\n"
-        f"🔑 <b>Account Data:</b>\n<code>{clean_html(target_item['data'])}</code>",
-        parse_mode="HTML"
-    )
-
-    username = clean_html(q.from_user.username or "No Username")
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"🛍️ <b>New Auto Sale!</b>\nUser: @{username} (<code>{uid}</code>)\nItem: {clean_html(target_item['title'])}\nPrice: ${target_item['price']:.2f}",
-        parse_mode="HTML"
-    )
-
-async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    txt = (
-        "<b>💳 ADD BALANCE / FUND WALLET</b>\n\n"
-        "Send payment to Admin:\n"
-        "• <b>USDT (TRC20):</b> <code>YOUR_USDT_ADDRESS</code>\n"
-        "• <b>UPI ID:</b> <code>yourupi@upi</code>\n\n"
-        "<i>Contact Admin with payment screenshot to credit balance.</i>"
-    )
-    kb = [[InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]]
-    await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-
-async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    kb = [[InlineKeyboardButton("🔙 Main Menu", callback_data="btn_main")]]
-    await q.message.edit_text("<b>👨‍💻 Support:</b>\nContact admin for help or custom orders.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-
-# Admin Dashboard
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Unauthorized access.")
         return
 
     kb = [
-        [InlineKeyboardButton("➕ Add Stock", callback_data="adm_add_stock")],
-        [InlineKeyboardButton("💳 Add User Balance", callback_data="adm_add_bal")],
-        [InlineKeyboardButton("📊 View Store Stats", callback_data="adm_stats")]
+        [InlineKeyboardButton("🔹 Normal Acc", callback_data="adm_type_normal")],
+        [InlineKeyboardButton("⭐ Premium Acc", callback_data="adm_type_premium")],
+        [InlineKeyboardButton("🛠️ Maked Acc", callback_data="adm_type_maked")]
     ]
-    txt = "<b>⚙️ ADMIN CONTROL PANEL</b>\nChoose an action:"
-    if update.message:
-        await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
-    else:
-        await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    admin_wizard[ADMIN_ID] = {"step": "SELECT_TYPE"}
+    await update.message.reply_text("<b>➕ Select Account Type to Add:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_wizard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if q.from_user.id != ADMIN_ID:
         return
     await q.answer()
-    data = q.data
 
-    if data == "adm_stats":
-        txt = f"<b>📊 STORE STATS</b>\n\nTotal In-Stock Items: {len(items)}\nTotal Registered Users: {len(users)}"
-        kb = [[InlineKeyboardButton("🔙 Back to Admin", callback_data="adm_home")]]
-        await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    acc_type = q.data.replace("adm_type_", "")
+    admin_wizard[ADMIN_ID] = {"step": "WAITING_AGE", "category": acc_type}
 
-    elif data == "adm_add_bal":
-        admin_action[ADMIN_ID] = "ADD_BAL"
-        await q.message.edit_text("Send User ID & Amount:\nFormat: <code>USER_ID | AMOUNT</code>\nExample: <code>8895089247 | 10.50</code>", parse_mode="HTML")
+    await q.message.edit_text(f"Selected: <b>{acc_type.capitalize()} Acc</b>\n\n<b>Step 2:</b> Send <b>Account Age</b> (e.g. <code>Fresh</code>, <code>2022 Aged</code>, <code>6 Months Old</code>):", parse_mode="HTML")
 
-    elif data == "adm_add_stock":
-        admin_action[ADMIN_ID] = "ADD_STOCK"
-        cat_str = clean_html(", ".join(categories))
-        await q.message.edit_text(
-            f"Available Categories:\n<i>{cat_str}</i>\n\nSend format:\n<code>Category | Title | Price | Data</code>\n\n"
-            f"Example:\n<code>🇺🇸 USA Accounts | USA Aged | 4.5 | Session Data</code>",
-            parse_mode="HTML"
-        )
-
-    elif data == "adm_home":
-        await admin_panel(update, context)
-
-async def admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_admin_wizard_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    if uid != ADMIN_ID:
+    if uid != ADMIN_ID or uid not in admin_wizard:
         return
 
-    act = admin_action.get(uid)
+    state = admin_wizard[uid]
+    step = state.get("step")
 
-    if act == "ADD_BAL":
+    if step == "WAITING_AGE":
+        state["age"] = update.message.text.strip()
+        state["step"] = "WAITING_PRICE"
+        await update.message.reply_text("<b>Step 3:</b> Enter <b>Price</b> in USD (e.g. <code>4.5</code> or <code>10</code>):", parse_mode="HTML")
+
+    elif step == "WAITING_PRICE":
         try:
-            target_id, amt = update.message.text.split("|")
-            target_id = int(target_id.strip())
-            amt = float(amt.strip())
+            state["price"] = float(update.message.text.strip())
+            state["step"] = "WAITING_DATA"
+            await update.message.reply_text("<b>Step 4:</b> Send <b>Account Details / Stock Data</b> (Session, OTP Link, Phone, etc.):", parse_mode="HTML")
+        except ValueError:
+            await update.message.reply_text("❌ Please enter a valid number for price (e.g. <code>5.0</code>):", parse_mode="HTML")
 
-            u_data = get_user(target_id)
-            u_data["balance"] += amt
-            admin_action[uid] = None
+    elif step == "WAITING_DATA":
+        global item_counter
+        state["data"] = update.message.text.strip()
+        
+        items.append({
+            "id": item_counter,
+            "category": state["category"],
+            "age": state["age"],
+            "price": state["price"],
+            "data": state["data"]
+        })
+        item_counter += 1
+        
+        del admin_wizard[uid]
 
-            await update.message.reply_text(f"✅ Added ${amt:.2f} to User ID <code>{target_id}</code>.", parse_mode="HTML")
-            await context.bot.send_message(chat_id=target_id, text=f"🎉 <b>Balance Added!</b>\n\n${amt:.2f} credited to your account.", parse_mode="HTML")
-        except Exception:
-            await update.message.reply_text("❌ Wrong Format! Use: `USER_ID | AMOUNT`")
+        txt = (
+            f"✅ <b>Stock Added Successfully!</b>\n\n"
+            f"• <b>Type:</b> {state['category'].capitalize()} Acc\n"
+            f"• <b>Age:</b> {state['age']}\n"
+            f"• <b>Price:</b> ${state['price']:.2f}\n"
+            f"• <b>Data:</b> <code>{clean_html(state['data'])}</code>"
+        )
+        await update.message.reply_text(txt, parse_mode="HTML")
 
-    elif act == "ADD_STOCK":
-        global item_id_counter
-        try:
-            cat, title, price, data = update.message.text.split("|")
-            items.append({
-                "id": item_id_counter,
-                "cat": cat.strip(),
-                "title": title.strip(),
-                "price": float(price.strip()),
-                "data": data.strip()
-            })
-            item_id_counter += 1
-            admin_action[uid] = None
-            await update.message.reply_text("✅ Stock Added Successfully!")
-        except Exception:
-            await update.message.reply_text("❌ Wrong Format! Use: `Category | Title | Price | Data`")
+async def cmd_addbal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        raw_text = update.message.text.replace("/addbal", "").strip()
+        uid, amt = raw_text.split("|")
+        uid = int(uid.strip())
+        amt = float(amt.strip())
+
+        u_data = get_user(uid)
+        u_data["balance"] += amt
+        await update.message.reply_text(f"✅ Added ${amt:.2f} to <code>{uid}</code>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=uid, text=f"🎉 <b>${amt:.2f} Credited to your Wallet!</b>", parse_mode="HTML")
+    except Exception:
+        await update.message.reply_text("❌ <b>Wrong Format!</b>\nUse: <code>/addbal UserID | Amount</code>", parse_mode="HTML")
+
+async def cmd_viewstock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    if not items:
+        await update.message.reply_text("Store is currently empty.")
+        return
+    txt = "<b>📊 CURRENT STOCK IN STORE:</b>\n\n"
+    for i in items:
+        txt += f"• ID: {i['id']} [{i['category'].upper()}] | Age: {clean_html(i['age'])} — ${i['price']}\n  Data: <code>{clean_html(i['data'])}</code>\n\n"
+    await update.message.reply_text(txt, parse_mode="HTML")
 
 def main():
     threading.Thread(target=run_flask, daemon=True).start()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
+    # User Handlers
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin_panel))
-
     app.add_handler(CallbackQueryHandler(start, pattern="^btn_main$"))
-    app.add_handler(CallbackQueryHandler(show_categories, pattern="^btn_cats$"))
+    app.add_handler(CallbackQueryHandler(show_categories, pattern="^btn_categories$"))
+    app.add_handler(CallbackQueryHandler(category_stock_list, pattern="^cat_"))
+    app.add_handler(CallbackQueryHandler(buy_confirm, pattern="^buy_"))
+    app.add_handler(CallbackQueryHandler(pay_item, pattern="^pay_"))
     app.add_handler(CallbackQueryHandler(user_profile, pattern="^btn_profile$"))
-    app.add_handler(CallbackQueryHandler(add_balance, pattern="^btn_add_bal$"))
-    app.add_handler(CallbackQueryHandler(support, pattern="^btn_support$"))
+    app.add_handler(CallbackQueryHandler(deposit_info, pattern="^btn_add_bal$"))
+    app.add_handler(CallbackQueryHandler(support_info, pattern="^btn_support$"))
 
-    app.add_handler(CallbackQueryHandler(category_items, pattern="^cat_"))
-    app.add_handler(CallbackQueryHandler(item_view, pattern="^buy_item_"))
-    app.add_handler(CallbackQueryHandler(process_purchase, pattern="^purchase_"))
-
-    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^adm_"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text))
+    # Admin Commands
+    app.add_handler(CommandHandler("add", cmd_add))
+    app.add_handler(CallbackQueryHandler(admin_wizard_callback, pattern="^adm_type_"))
+    app.add_handler(CommandHandler("addbal", cmd_addbal))
+    app.add_handler(CommandHandler("viewstock", cmd_viewstock))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_admin_wizard_input))
 
     app.run_polling()
 
