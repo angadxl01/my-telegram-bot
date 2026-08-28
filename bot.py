@@ -128,8 +128,7 @@ async def check_force_join(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def send_force_join_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     req_channel = get_setting("req_channel")
-    channel_url = f")}"
-    
+    channel_url = "https://t.me/Soulidsssbot"
     kb = [
         [InlineKeyboardButton("📢 Join Main Channel", url=channel_url)],
         [InlineKeyboardButton("✅ Verify & Continue", callback_data="btn_main")]
