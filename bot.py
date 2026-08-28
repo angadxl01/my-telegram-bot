@@ -16,19 +16,19 @@ from telegram.ext import (
 BOT_TOKEN = "8794925442:AAFIHaUAJM8ZXt2guEN7Lq2kKyTTKzECWqw"
 ADMIN_ID = 8895089247
 
-# Webserver for Render free hosting
+# Flask Webserver
 web_app = Flask('')
 
 @web_app.route('/')
 def home():
-    return "Bot status: Running 24/7"
+    return "Bot Running 24/7"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     web_app.run(host='0.0.0.0', port=port)
 
-# Temporary Storage
-users = {}  # {user_id: {"balance": 0.0, "orders": 0}}
+# Data Storage
+users = {}
 categories = ["🇺🇸 USA Accounts", "🇬🇧 UK Accounts", "⭐️ TG Premium", "💎 Username Stock"]
 items = [
     {"id": 1, "cat": "🇺🇸 USA Accounts", "title": "USA Aged 2022 Account", "price": 4.5, "data": "Session: US_2022_KEY_9921"},
@@ -39,16 +39,21 @@ admin_action = {}
 
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# User Data Helper
 def get_user(uid):
     if uid not in users:
         users[uid] = {"balance": 0.0, "orders": 0}
     return users[uid]
 
-# Main Menu
+def clean_html(text):
+    if not text:
+        return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+# User Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
     u_data = get_user(u.id)
+    first_name = clean_html(u.first_name)
 
     kb = [
         [InlineKeyboardButton("🛍️ Browse Store", callback_data="btn_cats")],
@@ -57,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     txt = (
         f"<b>Welcome to TG Store! 👋</b>\n\n"
-        f"👤 <b>User:</b> {u.first_name}\n"
+        f"👤 <b>User:</b> {first_name}\n"
         f"🆔 <b>ID:</b> <code>{u.id}</code>\n"
         f"💰 <b>Wallet Balance:</b> ${u_data['balance']:.2f}\n\n"
         f"Select an option below to start buying stock:"
@@ -68,16 +73,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.callback_query.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-# User Profile
 async def user_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     u = q.from_user
     u_data = get_user(u.id)
+    first_name = clean_html(u.first_name)
 
     txt = (
         f"<b>👤 PROFILE INFO</b>\n\n"
-        f"• <b>Name:</b> {u.first_name}\n"
+        f"• <b>Name:</b> {first_name}\n"
         f"• <b>User ID:</b> <code>{u.id}</code>\n"
         f"• <b>Balance:</b> ${u_data['balance']:.2f}\n"
         f"• <b>Completed Orders:</b> {u_data['orders']}"
@@ -88,7 +93,6 @@ async def user_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await q.message.edit_text(txt, reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-# Categories Menu
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -100,7 +104,6 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await q.message.edit_text("<b>📂 Select Category:</b>", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-# Category Items
 async def category_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -110,7 +113,7 @@ async def category_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not cat_items:
         kb = [[InlineKeyboardButton("🔙 Back", callback_data="btn_cats")]]
-        await q.message.edit_text(f"❌ No stock in <b>{cat_name}</b> right now.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+        await q.message.edit_text(f"❌ No stock in <b>{clean_html(cat_name)}</b> right now.", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
         return
 
     kb = []
@@ -118,9 +121,8 @@ async def category_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb.append([InlineKeyboardButton(f"{i['title']} - ${i['price']:.2f}", callback_data=f"buy_item_{i['id']}")])
     kb.append([InlineKeyboardButton("🔙 Back", callback_data="btn_cats")])
 
-    await q.message.edit_text(f"<b>📦 Category: {cat_name}</b>\nChoose item to buy:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
+    await q.message.edit_text(f"<b>📦 Category: {clean_html(cat_name)}</b>\nChoose item to buy:", reply_markup=InlineKeyboardMarkup(kb), parse_mode="HTML")
 
-# Item View & Auto Purchase
 async def item_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -138,8 +140,8 @@ async def item_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     txt = (
         f"<b>🛒 Item Details:</b>\n\n"
-        f"• <b>Name:</b> {target_item['title']}\n"
-        f"• <b>Category:</b> {target_item['cat']}\n"
+        f"• <b>Name:</b> {clean_html(target_item['title'])}\n"
+        f"• <b>Category:</b> {clean_html(target_item['cat'])}\n"
         f"• <b>Price:</b> ${target_item['price']:.2f}\n\n"
         f"<b>Your Wallet:</b> ${u_data['balance']:.2f}"
     )
@@ -169,23 +171,22 @@ async def process_purchase(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Auto Deduct and Deliver
     u_data["balance"] -= target_item["price"]
     u_data["orders"] += 1
     items.remove(target_item)
 
     await q.message.edit_text(
         f"✅ <b>PURCHASE SUCCESSFUL!</b>\n\n"
-        f"<b>Item:</b> {target_item['title']}\n"
+        f"<b>Item:</b> {clean_html(target_item['title'])}\n"
         f"<b>Price:</b> ${target_item['price']:.2f}\n\n"
-        f"🔑 <b>Account Data:</b>\n<code>{target_item['data']}</code>",
+        f"🔑 <b>Account Data:</b>\n<code>{clean_html(target_item['data'])}</code>",
         parse_mode="HTML"
     )
 
-    # Notify Admin
+    username = clean_html(q.from_user.username or "No Username")
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"🛍️ <b>New Auto Sale!</b>\nUser: @{q.from_user.username} (<code>{uid}</code>)\nItem: {target_item['title']}\nPrice: ${target_item['price']:.2f}",
+        text=f"🛍️ <b>New Auto Sale!</b>\nUser: @{username} (<code>{uid}</code>)\nItem: {clean_html(target_item['title'])}\nPrice: ${target_item['price']:.2f}",
         parse_mode="HTML"
     )
 
@@ -243,7 +244,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "adm_add_stock":
         admin_action[ADMIN_ID] = "ADD_STOCK"
-        cat_str = ", ".join(categories)
+        cat_str = clean_html(", ".join(categories))
         await q.message.edit_text(
             f"Available Categories:\n<i>{cat_str}</i>\n\nSend format:\n<code>Category | Title | Price | Data</code>\n\n"
             f"Example:\n<code>🇺🇸 USA Accounts | USA Aged | 4.5 | Session Data</code>",
