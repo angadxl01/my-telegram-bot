@@ -36,7 +36,7 @@ UPI_ID = "angadxl@fam"
 
 # --- UPSTASH REDIS CONFIGURATION ---
 # Yahan apna Upstash se copy kiya hua Redis URL daalein
-REDIS_URL = "rediss://default:YOUR_PASSWORD@your-db-name.upstash.io:port"
+REDIS_URL = "redis-cli --tls -u redis://default:gQAAAAAAA2N-AAIgcDEzZmE1ZWVjODVhYjE0MTgzOTE3ODRhYjQwNDU5MWNjMQ@mint-hyena-222078.upstash.io:6379
 r = redis.from_url(REDIS_URL)
 # =======================================================
 
