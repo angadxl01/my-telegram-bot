@@ -2,3 +2,4 @@ python-telegram-bot
 telethon
 flask
 psycopg2-binary
+pip install redis
